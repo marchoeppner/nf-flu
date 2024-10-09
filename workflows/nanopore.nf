@@ -31,15 +31,16 @@ include { BLAST_MAKEBLASTDB as BLAST_MAKEBLASTDB_REFDB        } from '../modules
 include { BLAST_BLASTN as BLAST_BLASTN_IRMA                   } from '../modules/local/blastn'
 include { BLAST_BLASTN as BLAST_BLASTN_CONSENSUS              } from '../modules/local/blastn'
 include { BLAST_BLASTN as BLAST_BLASTN_CONSENSUS_REF_DB       } from '../modules/local/blastn'
-include { CUSTOM_DUMPSOFTWAREVERSIONS  as SOFTWARE_VERSIONS   } from '../modules/nf-core/modules/custom/dumpsoftwareversions/main'
-include { VADR; VADR_SUMMARIZE_ISSUES                         } from '../modules/local/vadr'
+include { SETUP_FLU_VADR_MODEL; VADR; VADR_SUMMARIZE_ISSUES   } from '../modules/local/vadr'
 include { PRE_TABLE2ASN; TABLE2ASN; POST_TABLE2ASN            } from '../modules/local/table2asn'
 include { MULTIQC                                             } from '../modules/local/multiqc'
+include { MQC_VERSIONS_TABLE } from '../modules/local/mqc_versions_table'
 
 def pass_sample_reads = [:]
 def fail_sample_reads = [:]
 ch_influenza_db_fasta = file(params.ncbi_influenza_fasta)
 ch_influenza_metadata = file(params.ncbi_influenza_metadata)
+ch_vadr_model_targz = file(params.vadr_model_targz)
 if (params.clair3_user_variant_model) {
   ch_user_clair3_model = file(params.clair3_user_variant_model, checkIfExists: true)
 }
@@ -151,6 +152,8 @@ workflow NANOPORE {
   BLAST_MAKEBLASTDB_NCBI(ch_input_ref_db)
   ch_versions = ch_versions.mix(BLAST_MAKEBLASTDB_NCBI.out.versions)
 
+  SETUP_FLU_VADR_MODEL(ch_vadr_model_targz)
+
   CAT_NANOPORE_FASTQ(ch_reads)
 
   // IRMA to generate amended consensus sequences
@@ -206,14 +209,14 @@ workflow NANOPORE {
 
     ch_versions = ch_versions.mix(CLAIR3.out.versions)
 
-    BCF_FILTER_CLAIR3(CLAIR3.out.vcf, params.major_allele_fraction)
+    BCF_FILTER_CLAIR3(CLAIR3.out.vcf, params.major_allele_fraction, params.minor_allele_fraction)
     ch_versions = ch_versions.mix(BCF_FILTER_CLAIR3.out.versions)
     ch_vcf_filter = BCF_FILTER_CLAIR3.out.vcf
   } else if (params.variant_caller == 'medaka') {
     MEDAKA(MINIMAP2.out.alignment)
     ch_versions = ch_versions.mix(MEDAKA.out.versions)
 
-    BCF_FILTER_MEDAKA(MEDAKA.out.vcf, params.major_allele_fraction)
+    BCF_FILTER_MEDAKA(MEDAKA.out.vcf, params.major_allele_fraction, params.minor_allele_fraction)
     ch_versions = ch_versions.mix(BCF_FILTER_MEDAKA.out.versions)
     ch_vcf_filter = BCF_FILTER_MEDAKA.out.vcf
   }
@@ -242,7 +245,7 @@ workflow NANOPORE {
   CAT_CONSENSUS(ch_final_consensus)
   ch_versions = ch_versions.mix(CAT_CONSENSUS.out.versions)
 
-  VADR(CAT_CONSENSUS.out.consensus_fasta)
+  VADR(CAT_CONSENSUS.out.consensus_fasta, SETUP_FLU_VADR_MODEL.out)
   ch_versions = ch_versions.mix(VADR.out.versions)
   VADR.out.feature_table
     .combine(VADR.out.pass_fasta, by: 0)
@@ -285,14 +288,14 @@ workflow NANOPORE {
   ch_workflow_summary = Channel.value(workflow_summary)
   ch_multiqc_config = Channel.fromPath("$projectDir/assets/multiqc_config.yaml")
 
-  SOFTWARE_VERSIONS(ch_versions.unique().collectFile(name: 'collated_versions.yml'))
+  MQC_VERSIONS_TABLE(ch_versions.unique().collectFile(name: 'collated_versions.yml'))
 
   MULTIQC(
       ch_multiqc_config,
       MINIMAP2.out.stats.collect().ifEmpty([]),
       MOSDEPTH_GENOME.out.mqc.collect().ifEmpty([]),
       BCFTOOLS_STATS.out.stats.collect().ifEmpty([]),
-      SOFTWARE_VERSIONS.out.mqc_yml.collect(),
+      MQC_VERSIONS_TABLE.out.mqc_yml.collect(),
       ch_workflow_summary.collectFile(name: "workflow_summary_mqc.yaml")
   )
 }

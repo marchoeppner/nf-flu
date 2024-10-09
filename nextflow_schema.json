@@ -171,6 +171,12 @@
                     "default": false,
                     "fa_icon": "fas fa-fast-forward",
                     "description": "Skip genome-wide and amplicon coverage plot generation from mosdepth output."
+                },
+                "output_unmapped_reads": {
+                    "type": "boolean",
+                    "default": false,
+                    "fa_icon": "fas fa-dna",
+                    "description": "Keep unmapped reads in BAM output. BAM output sizes without unmapped reads may be drastically smaller."
                 }
             },
             "fa_icon": "fas fa-retweet"
@@ -225,6 +231,19 @@
                 }
             },
             "fa_icon": "fas fa-virus"
+        },
+        "annotation_options": {
+            "title": "Annotation options",
+            "type": "object",
+            "description": "Options for genome annotation",
+            "properties": {
+                "vadr_model_targz": {
+                    "type": "string",
+                    "default": "https://zenodo.org/records/13261208/files/vadr-models-flu-1.6.3-2.tar.gz",
+                    "description": "Path/URL to the VADR model tarball (.tar.gz) to use for annotation",
+                    "fa_icon": "fas fa-file-import"
+                }
+            }
         },
         "generic_options": {
             "title": "Generic options",
